@@ -23,10 +23,14 @@ namespace TetrisBetaWP
         Texture2D backGroundTexture;
         Texture2D playAreaTexture;
         Texture2D spriteTexture;
-        Texture2D startScreenTexture;
+        Texture2D menuScreenTexture;
         Texture2D startgameButtonTexture;
+        Texture2D startnewgameButtonTexture;
         Texture2D quitButtonTexture;
+        Texture2D resumeButtonTexture;
         Rectangle startgameButtonBounds;
+        Rectangle startnewgameButtonBounds;
+        Rectangle resumeButtonBounds;
         Rectangle quitButtonBounds;
         Point centerOfScreen;
         Point currentBlockStartingPos;
@@ -92,19 +96,29 @@ namespace TetrisBetaWP
             hud.NextBoxTexture = Content.Load<Texture2D>(@"Images\TetrisBetaWP_NextButton");
             hud.LevelBoxTexture = Content.Load<Texture2D>(@"Images\TetrisBetaWP_LevelButton_orange");
             hud.ScoreBoxTexture = Content.Load<Texture2D>(@"Images\TetrisBetaWP_ScoreButton_orange_v2");
+            hud.DownControlTexture = Content.Load<Texture2D>(@"Images\red_sliderDown");
+            hud.UpControlTexture = Content.Load<Texture2D>(@"Images\red_sliderUp");
+            hud.LeftControlTexture = Content.Load<Texture2D>(@"Images\red_sliderLeft");
+            hud.RightControlTexture = Content.Load<Texture2D>(@"Images\red_sliderRight");
+            hud.PausedBoxTexture = Content.Load<Texture2D>(@"Images\red_boxCross");
+            hud.LoadControlPoints();
 
             backGroundTexture = Content.Load<Texture2D>(@"Images\TetrisBackGround_480_800");
-            startScreenTexture = Content.Load<Texture2D>(@"Images\TetrisBetaWP_StartScreen_400_400");
+            menuScreenTexture = Content.Load<Texture2D>(@"Images\TetrisBetaWP_StartScreen_400_400");
 
             startgameButtonTexture = Content.Load<Texture2D>(@"Images\TetrisBetaWP_red_button_startgame");
+            startnewgameButtonTexture = Content.Load<Texture2D>(@"Images\TetrisBetaWP_red_button_startnewgame");
             quitButtonTexture = Content.Load<Texture2D>(@"Images\TetrisBetaWP_red_button_quit");
+            resumeButtonTexture = Content.Load<Texture2D>(@"Images\TetrisBetaWP_red_button_resumegame");
 
             spriteTexture = Content.Load<Texture2D>(@"Images\TetrisSheet7");
 
             startgameButtonBounds = new Rectangle(centerOfScreen.X - (startgameButtonTexture.Width / 2), centerOfScreen.Y - 85, startgameButtonTexture.Width, startgameButtonTexture.Height);
+            startnewgameButtonBounds = startgameButtonBounds;
             quitButtonBounds = new Rectangle(centerOfScreen.X - (quitButtonTexture.Width / 2), centerOfScreen.Y + 50, quitButtonTexture.Width, quitButtonTexture.Height);
+            resumeButtonBounds = startgameButtonBounds;
             // TODO: Fix values below
-            nextBlockPos = new Point(playAreaPos.X + Constants.GAMESIZEWIDTH + Constants.PLAYAREAOFFSET - (Constants.TITLESIZE * 5), playAreaPos.Y + Constants.TITLESIZE);
+            nextBlockPos = new Point(playAreaPos.X + Constants.GAMESIZEWIDTH + Constants.PLAYAREAOFFSET - (Constants.TITLESIZE * 3), playAreaPos.Y + Constants.TITLESIZE);
 
             // TODO: use this.Content to load your game content here
         }
@@ -130,6 +144,7 @@ namespace TetrisBetaWP
             switch (gameState)
             {
                 case GameStates.StartScreen:
+                    // Touch Control Logic
                     foreach (TouchLocation location in touchState)
                     {
                         if (location.State == TouchLocationState.Pressed)
@@ -147,14 +162,179 @@ namespace TetrisBetaWP
                             }
                         }
                     }
+                    // End Touch Control Logic
                     break;
                 case GameStates.Playing:
+                    // refactor with Min()
+                    if ((Constants.STARTINGFPS - (hud.Level * Constants.FPSREDUCTIONPERLEVEL)) < Constants.MINFPS)
+                    {
+                        millisecondsPerFrame = Constants.MINFPS;
+                    }
+                    else
+                    {
+                        millisecondsPerFrame = Constants.STARTINGFPS - (hud.Level * Constants.FPSREDUCTIONPERLEVEL);
+                    }
+                    // Touch Control Logic
+                    foreach (TouchLocation location in touchState)
+                    {
+                        if (location.State == TouchLocationState.Pressed)
+                        {
+                            if (new Rectangle(hud.PausedBoxPoint.X, hud.PausedBoxPoint.Y, hud.PausedBoxTexture.Width, hud.PausedBoxTexture.Height).Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                gameState = GameStates.Paused;
+                                break;
+                            }
+                            else if (new Rectangle(hud.UpControlPoint.X, hud.UpControlPoint.Y, hud.UpControlTexture.Width, hud.UpControlTexture.Height).Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                currentBlock.Rotate(gridMap);
+                                break;
+                            }
+                            else if (new Rectangle(hud.LeftControlPoint.X, hud.LeftControlPoint.Y, hud.LeftControlTexture.Width, hud.LeftControlTexture.Height).Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                if (!CheckForCollision(Direction.Left))
+                                {
+                                    currentBlock.Move(Direction.Left);
+                                }
+                                break;
+                            }
+                            else if (new Rectangle(hud.RightControlPoint.X, hud.RightControlPoint.Y, hud.RightControlTexture.Width, hud.RightControlTexture.Height).Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                if (!CheckForCollision(Direction.Right))
+                                {
+                                    currentBlock.Move(Direction.Right);
+                                }
+                                break;
+                            }
+                            else if (new Rectangle(hud.DownControlPoint.X, hud.DownControlPoint.Y, hud.DownControlTexture.Width, hud.DownControlTexture.Height).Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                if (!CheckForCollision(Direction.Down))
+                                {
+                                    currentBlock.Move(Direction.Down);
+                                }
+                                else
+                                {
+                                    AddSpritesToMap();
+                                    if (CheckForClearedLines())
+                                    {
+                                        gameState = GameStates.Flashing;
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        currentBlock = nextBlock;
+                                        currentBlock.playarea = new Point(playAreaPos.X, playAreaPos.Y);
+                                        GetNextBlock();
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    // End Touch Control Logic
+
+                    timeSinceLastFrame += gameTime.ElapsedGameTime.Milliseconds;
+                    if (timeSinceLastFrame > millisecondsPerFrame)
+                    {
+                        timeSinceLastFrame -= millisecondsPerFrame;
+                        if (!CheckForCollision(Direction.Down))
+                        {
+                            currentBlock.Move(Direction.Down);
+                        }
+                        else
+                        {
+                            AddSpritesToMap();
+                            if (CheckForClearedLines())
+                            {
+                                gameState = GameStates.Flashing;
+                                break;
+                            }
+                            else
+                            {
+                                currentBlock = nextBlock;
+                                currentBlock.playarea = new Point(playAreaPos.X, playAreaPos.Y);
+                                GetNextBlock();
+                            }
+                        }
+                    }
                     break;
                 case GameStates.Flashing:
+                    // Touch Control Logic
+                    foreach (TouchLocation location in touchState)
+                    {
+                        if (location.State == TouchLocationState.Pressed)
+                        {
+                            if (new Rectangle(hud.PausedBoxPoint.X, hud.PausedBoxPoint.Y, hud.PausedBoxTexture.Width, hud.PausedBoxTexture.Height).Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                gameState = GameStates.Paused;
+                                break;
+                            }
+                        }
+                    }
+                    // End Touch Control Logic
+                    timeSinceLastFrame += gameTime.ElapsedGameTime.Milliseconds;
+                    if (timeSinceLastFrame > Constants.FLASHFPS)
+                    {
+                        timeSinceLastFrame -= Constants.FLASHFPS;
+                        flashINFO.flashcount++;
+                        if (flashINFO.flashing)
+                        {
+                            flashINFO.flashing = false;
+                        }
+                        else
+                        {
+                            flashINFO.flashing = true;
+                        }
+                        if (flashINFO.flashcount > Constants.FLASHCOUNT)
+                        {
+                            gameState = GameStates.Playing;
+                            RemoveClearedLines();
+                            currentBlock = nextBlock;
+                            currentBlock.playarea = new Point(playAreaPos.X, playAreaPos.Y);
+                            GetNextBlock();
+                        }
+                    }
                     break;
                 case GameStates.Paused:
+                    // Touch Control Logic
+                    foreach (TouchLocation location in touchState)
+                    {
+                        if (location.State == TouchLocationState.Pressed)
+                        {
+                            if (resumeButtonBounds.Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                gameState = GameStates.Playing;
+                                break;
+                            }
+                            else if (quitButtonBounds.Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                this.Exit();
+                            }
+                        }
+                    }
+                    // End Touch Control Logic
                     break;
                 case GameStates.GameOver:
+                    // Touch Control Logic
+                    foreach (TouchLocation location in touchState)
+                    {
+                        if (location.State == TouchLocationState.Pressed)
+                        {
+                            if (startnewgameButtonBounds.Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                gridMap.Clear();
+                                gameState = GameStates.Playing;
+                                hud.Restart();
+                                GetBlock();
+                                GetNextBlock();
+                                break;
+                            }
+                            else if (quitButtonBounds.Contains(new Point((int)location.Position.X, (int)location.Position.Y)))
+                            {
+                                this.Exit();
+                            }
+                        }
+                    }
+                    // End Touch Control Logic
                     break;
                 default:
                     break;
@@ -327,7 +507,7 @@ namespace TetrisBetaWP
             switch (gameState)
             {
                 case GameStates.StartScreen:
-                    spriteBatch.Draw(startScreenTexture, new Rectangle(centerOfScreen.X - (startScreenTexture.Width / 2), centerOfScreen.Y - (startScreenTexture.Height / 2), startScreenTexture.Width, startScreenTexture.Height), Color.White);
+                    spriteBatch.Draw(menuScreenTexture, new Rectangle(centerOfScreen.X - (menuScreenTexture.Width / 2), centerOfScreen.Y - (menuScreenTexture.Height / 2), menuScreenTexture.Width, menuScreenTexture.Height), Color.White);
                     spriteBatch.Draw(startgameButtonTexture, startgameButtonBounds, Color.White);
                     spriteBatch.Draw(quitButtonTexture, quitButtonBounds, Color.White);
                     break;
@@ -376,6 +556,9 @@ namespace TetrisBetaWP
                         gridMap[key].Draw(spriteBatch, (key.X * Constants.TITLESIZE) + playAreaPos.X, (key.Y * Constants.TITLESIZE) + playAreaPos.Y);
                     }
                     hud.Draw(spriteBatch);
+                    spriteBatch.Draw(menuScreenTexture, new Rectangle(centerOfScreen.X - (menuScreenTexture.Width / 2), centerOfScreen.Y - (menuScreenTexture.Height / 2), menuScreenTexture.Width, menuScreenTexture.Height), Color.White);
+                    spriteBatch.Draw(resumeButtonTexture, resumeButtonBounds, Color.White);
+                    spriteBatch.Draw(quitButtonTexture, quitButtonBounds, Color.White);
                     break;
                 case GameStates.GameOver:
                     spriteBatch.Draw(playAreaTexture, new Rectangle(playAreaPos.X, playAreaPos.Y, playAreaTexture.Width, playAreaTexture.Height), Color.White);
@@ -385,6 +568,9 @@ namespace TetrisBetaWP
                         gridMap[key].Draw(spriteBatch, (key.X * Constants.TITLESIZE) + playAreaPos.X, (key.Y * Constants.TITLESIZE) + playAreaPos.Y);
                     }
                     hud.Draw(spriteBatch);
+                    spriteBatch.Draw(menuScreenTexture, new Rectangle(centerOfScreen.X - (menuScreenTexture.Width / 2), centerOfScreen.Y - (menuScreenTexture.Height / 2), menuScreenTexture.Width, menuScreenTexture.Height), Color.White);
+                    spriteBatch.Draw(startnewgameButtonTexture, startnewgameButtonBounds, Color.White);
+                    spriteBatch.Draw(quitButtonTexture, quitButtonBounds, Color.White);
                     break;
                 default:
                     break;
